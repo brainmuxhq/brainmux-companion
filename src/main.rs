@@ -8,8 +8,6 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -21,6 +19,16 @@ const MODEL: &str = "bge-m3";
 
 fn log(m: &str) {
     println!("[brainmux] {m}");
+}
+
+fn notify(title: &str, body: &str) {
+    // Best-effort masaüstü bildirimi — AppImage terminalsiz çalışır, user görsel geri bildirim alsın.
+    // notify-send yoksa sessiz geç (çalışmayı bloklamaz).
+    let _ = Command::new("notify-send")
+        .args(["-a", "brainmux", "-i", "brainmux", title, body])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
 }
 
 fn home() -> PathBuf {
@@ -106,6 +114,7 @@ fn ensure_model() {
         return;
     }
     log(&format!("  {MODEL} indiriliyor (ilk sefer, ~1GB)…"));
+    notify("brainmux — ilk kurulum", "Yapay zeka modeli iniyor (~1GB, birkaç dakika)…");
     if let Ok(resp) = ureq::post(&format!("{OLLAMA}/api/pull")).send_json(serde_json::json!({"model": MODEL})) {
         let reader = BufReader::new(resp.into_reader());
         for line in reader.lines().map_while(Result::ok) {
@@ -158,6 +167,17 @@ fn wait_port(addr: &str, name: &str) {
 
 fn main() {
     log("brainmux Companion (Rust bootstrapper) başlıyor…");
+
+    // Tek örnek: çekirdek zaten açıksa (kullanıcı ikona ikinci kez tıkladı) yeni kopya açma —
+    // sadece konsolu öne getir. İki paralel çekirdek = port çakışması + kafa karışıklığı.
+    if std::net::TcpStream::connect(CORE_ADDR).is_ok() {
+        log("çekirdek zaten çalışıyor → konsol açılıyor.");
+        notify("brainmux çalışıyor", "Konsol açılıyor…");
+        let _ = Command::new("xdg-open").arg(CONSOLE_URL).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+        return;
+    }
+    notify("brainmux başlatılıyor", "Yerel motor hazırlanıyor…");
+
     provision_dirs(); // 1
     state_check(); // 2
     auto_provision(); // 3
@@ -173,7 +193,7 @@ fn main() {
             "apps/core/src",
         ])
         .current_dir(&repo);
-    let core = match spawn_grouped(core_cmd) {
+    let mut core = match spawn_grouped(core_cmd) {
         Ok(c) => c,
         Err(e) => {
             log(&format!("HATA: çekirdek başlatılamadı ({e}) — uv kurulu mu?"));
@@ -201,18 +221,19 @@ fn main() {
     }
 
     log(&format!("hazır → {CONSOLE_URL}"));
+    notify("brainmux hazır", "Konsol açılıyor — modülleri kullanabilirsiniz.");
     let _ = Command::new("xdg-open").arg(CONSOLE_URL).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
 
-    // Ctrl+C → clean teardown.
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    let _ = ctrlc::set_handler(move || r.store(false, Ordering::SeqCst));
-    log("çalışıyor. durdurmak için Ctrl+C.");
-    while running.load(Ordering::SeqCst) {
-        thread::sleep(Duration::from_millis(300));
-    }
+    // Quit paths: (a) web konsol "Lokal Modu Durdur" → core POST /shutdown → core çıkar → wait döner;
+    // (b) Ctrl+C (terminalden) → handler core grubunu öldürür → wait döner. Headless (AppImage) → (a).
+    let core_pid = core.id() as i32;
+    let _ = ctrlc::set_handler(move || unsafe {
+        libc::kill(-core_pid, libc::SIGTERM);
+    });
+    log("çalışıyor. Konsoldan 'Lokal Modu Durdur' ya da Ctrl+C ile durdur.");
+    let _ = core.wait(); // çekirdek çıkana dek bloklar (web shutdown veya Ctrl+C)
 
-    log("kapatılıyor…");
+    log("çekirdek durdu — kapatılıyor…");
     if let Some(c) = &console {
         kill_group(c);
     }
