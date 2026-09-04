@@ -114,6 +114,10 @@ fn console_command(_b: &Bundle) -> Command {
     let mut c = Command::new("npm");
     c.args(["--prefix", "apps/app", "run", "dev", "--", "-p", "3100"]).current_dir(repo());
     c.env("NEXT_PUBLIC_CORE_URL", "http://127.0.0.1:8787");
+    // Desktop'ta konsol WEB-GATE KAPALI (127.0.0.1, dev-bypass) — kimlik app-seviyesi (üyelik,
+    // sistem-tarayıcı OAuth → deep-link; Faz-4). Web Supabase gate 127.0.0.1'de çerez tutmaz → login
+    // döngüsü olur. Boş bırakınca middleware dev-bypass'a düşer (ADR-0008).
+    c.env("NEXT_PUBLIC_SUPABASE_URL", "").env("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
     c
 }
 
