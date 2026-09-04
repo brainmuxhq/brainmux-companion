@@ -24,7 +24,13 @@ fn log(m: &str) {
 }
 
 fn home() -> PathBuf {
-    PathBuf::from(std::env::var("HOME").expect("HOME"))
+    match std::env::var("HOME") {
+        Ok(h) => PathBuf::from(h),
+        Err(_) => {
+            log("UYARI: HOME tanımlı değil → /tmp kullanılıyor");
+            PathBuf::from("/tmp")
+        }
+    }
 }
 fn bmux_home() -> PathBuf {
     std::env::var("BRAINMUX_HOME")
@@ -167,7 +173,13 @@ fn main() {
             "apps/core/src",
         ])
         .current_dir(&repo);
-    let core = spawn_grouped(core_cmd).expect("çekirdek başlatılamadı");
+    let core = match spawn_grouped(core_cmd) {
+        Ok(c) => c,
+        Err(e) => {
+            log(&format!("HATA: çekirdek başlatılamadı ({e}) — uv kurulu mu?"));
+            std::process::exit(1);
+        }
+    };
     wait_port(CORE_ADDR, "çekirdek");
     log("  çekirdek yayında: 127.0.0.1:8787 ✓");
 
@@ -177,8 +189,16 @@ fn main() {
         .args(["--prefix", "apps/app", "run", "dev", "--", "-p", "3100"])
         .current_dir(&repo)
         .env("NEXT_PUBLIC_CORE_URL", "http://127.0.0.1:8787");
-    let console = spawn_grouped(con_cmd).ok();
-    wait_port(CONSOLE_ADDR, "konsol");
+    let console = match spawn_grouped(con_cmd) {
+        Ok(c) => Some(c),
+        Err(e) => {
+            log(&format!("UYARI: konsol başlatılamadı ({e}) — npm/Node var mı?"));
+            None
+        }
+    };
+    if console.is_some() {
+        wait_port(CONSOLE_ADDR, "konsol");
+    }
 
     log(&format!("hazır → {CONSOLE_URL}"));
     let _ = Command::new("xdg-open").arg(CONSOLE_URL).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
