@@ -30,7 +30,6 @@ pub fn run() {
             let bundle = launcher::Bundle {
                 core_python: res.as_ref().map(|r| r.join("bundle/core-bundle/py/bin/python3")).filter(|p| p.exists()),
                 modules_dir: res.as_ref().map(|r| r.join("bundle/modules")).filter(|p| p.exists()),
-                console_dist: res.as_ref().map(|r| r.join("bundle/console")).filter(|p| p.exists()),
             };
             // Ağır iş (provizyon + core + console) arka planda; pencere splash gösterir, bloklamaz.
             std::thread::spawn(move || {
