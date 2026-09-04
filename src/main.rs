@@ -14,8 +14,8 @@ use std::time::Duration;
 const OLLAMA: &str = "http://127.0.0.1:11434";
 const CORE_ADDR: &str = "127.0.0.1:8787";
 const CONSOLE_ADDR: &str = "127.0.0.1:3100";
-// Motor sayfası — app kurulunca buraya düşer (modül belli değil; ADR-0013). Evrak'a değil.
-const CONSOLE_URL: &str = "http://127.0.0.1:3100/console/lokal";
+// Modüller — app kurulunca buraya düşer (guided home; ADR-0013). Motor bağlıysa katalog, değilse onboarding.
+const CONSOLE_URL: &str = "http://127.0.0.1:3100/console/moduller";
 const MODEL: &str = "bge-m3";
 
 fn log(m: &str) {
