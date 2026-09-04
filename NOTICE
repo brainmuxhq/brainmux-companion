@@ -1,0 +1,10 @@
+brainmux Companion
+Copyright 2026 brainmux
+
+This product includes software developed by brainmux (https://brainmux.com).
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The local engine that this launcher runs is a separate, vendored runtime
+distributed under its own Apache License 2.0; its attribution is preserved
+alongside that component and is not restated here.
