@@ -24,6 +24,14 @@ pub fn run() {
         .manage(Pids(Mutex::new(Vec::new())))
         .setup(|app| {
             let handle = app.handle().clone();
+            // Paketlenmiş resource'lar (release) → gömülü çekirdek/modüller/konsol. Yoksa dev fallback (uv-repo).
+            let res = handle.path().resource_dir().ok();
+            // Array-form resources relative yolu korur → resource_dir/bundle/<...> (staging: src-tauri/bundle).
+            let bundle = launcher::Bundle {
+                core_python: res.as_ref().map(|r| r.join("bundle/core-bundle/py/bin/python3")).filter(|p| p.exists()),
+                modules_dir: res.as_ref().map(|r| r.join("bundle/modules")).filter(|p| p.exists()),
+                console_dist: res.as_ref().map(|r| r.join("bundle/console")).filter(|p| p.exists()),
+            };
             // Ağır iş (provizyon + core + console) arka planda; pencere splash gösterir, bloklamaz.
             std::thread::spawn(move || {
                 // Tek örnek: motor + konsol zaten açıksa yeniden başlatma, sadece konsola git.
@@ -32,7 +40,7 @@ pub fn run() {
                     return;
                 }
                 launcher::notify("brainmux başlatılıyor", "Yerel motor hazırlanıyor…");
-                let (pids, ready) = launcher::start();
+                let (pids, ready) = launcher::start(&bundle);
                 if let Some(state) = handle.try_state::<Pids>() {
                     *state.0.lock().unwrap() = pids;
                 }

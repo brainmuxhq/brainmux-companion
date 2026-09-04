@@ -1,3 +1,10 @@
 /target
 /dist
 .codegraph/
+/src-tauri/gen
+# Staged core+modules (built by packaging/build-desktop.sh) are heavy → ignore contents,
+# keep .gitkeep placeholders so tauri-build's resource validation passes on a plain checkout.
+/src-tauri/bundle/core-bundle/*
+/src-tauri/bundle/modules/*
+!/src-tauri/bundle/core-bundle/.gitkeep
+!/src-tauri/bundle/modules/.gitkeep

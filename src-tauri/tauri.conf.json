@@ -24,6 +24,7 @@
   "bundle": {
     "active": true,
     "targets": ["appimage", "deb"],
+    "resources": ["bundle/core-bundle", "bundle/modules"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

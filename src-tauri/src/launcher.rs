@@ -129,24 +129,68 @@ pub fn port_open(addr: &str) -> bool {
     std::net::TcpStream::connect(addr).is_ok()
 }
 
+/// Gömülü çekirdek: paketlenmiş portable-python (ADR-0011 §7). `<res>/core-bundle/py/bin/python3`.
+/// Yoksa dev fallback (uv-repo). Modüller de gömülü resource'tan (`<res>/modules`).
+pub struct Bundle {
+    pub core_python: Option<PathBuf>, // gömülü python; None → dev (uv-repo)
+    pub modules_dir: Option<PathBuf>, // gömülü modules; None → core kendi çözer
+    pub console_dist: Option<PathBuf>, // gömülü static konsol; None → dev (npm)
+}
+
+fn core_command(b: &Bundle) -> Command {
+    match &b.core_python {
+        Some(py) => {
+            // Self-contained: repo/uv GEREKMEZ. Paket venv'de kurulu → --app-dir yok.
+            let mut c = Command::new(py);
+            c.args([
+                "-m", "uvicorn", "brainmux_core.api.app:app", "--host", "127.0.0.1", "--port", "8787",
+            ]);
+            if let Some(md) = &b.modules_dir {
+                c.env("BRAINMUX_MODULES_DIR", md);
+            }
+            c
+        }
+        None => {
+            // Dev fallback: repo'dan uv.
+            let mut c = Command::new("uv");
+            c.args([
+                "run", "--project", "apps/core", "--env-file", ".env", "--", "uvicorn",
+                "brainmux_core.api.app:app", "--host", "127.0.0.1", "--port", "8787", "--app-dir",
+                "apps/core/src",
+            ])
+            .current_dir(repo());
+            c
+        }
+    }
+}
+
+fn console_command(b: &Bundle) -> Command {
+    match &b.console_dist {
+        // TODO(Faz-2b): gömülü static konsol'u yerel statik sunucuyla serve et.
+        Some(_dist) => {
+            let mut c = Command::new("npm");
+            c.args(["--prefix", "apps/app", "run", "dev", "--", "-p", "3100"]).current_dir(repo());
+            c.env("NEXT_PUBLIC_CORE_URL", "http://127.0.0.1:8787");
+            c
+        }
+        None => {
+            let mut c = Command::new("npm");
+            c.args(["--prefix", "apps/app", "run", "dev", "--", "-p", "3100"]).current_dir(repo());
+            c.env("NEXT_PUBLIC_CORE_URL", "http://127.0.0.1:8787");
+            c
+        }
+    }
+}
+
 /// Provizyon + core + console. Spawn edilen süreç-grubu pid'lerini döndürür (teardown için).
 /// Konsol :3100 hazır olunca `true` (webview oraya gidebilir).
-pub fn start() -> (Vec<i32>, bool) {
+pub fn start(bundle: &Bundle) -> (Vec<i32>, bool) {
     let mut pids = Vec::new();
     provision_dirs();
     ensure_ollama();
     ensure_model();
 
-    let repo = repo();
-    let mut core_cmd = Command::new("uv");
-    core_cmd
-        .args([
-            "run", "--project", "apps/core", "--env-file", ".env", "--", "uvicorn",
-            "brainmux_core.api.app:app", "--host", "127.0.0.1", "--port", "8787", "--app-dir",
-            "apps/core/src",
-        ])
-        .current_dir(&repo);
-    match spawn_grouped(core_cmd) {
+    match spawn_grouped(core_command(bundle)) {
         Ok(c) => {
             pids.push(c.id() as i32);
             std::mem::forget(c); // grup pid ile teardown'da öldürülür
@@ -155,12 +199,7 @@ pub fn start() -> (Vec<i32>, bool) {
     }
     wait_port(CORE_ADDR);
 
-    let mut con_cmd = Command::new("npm");
-    con_cmd
-        .args(["--prefix", "apps/app", "run", "dev", "--", "-p", "3100"])
-        .current_dir(&repo)
-        .env("NEXT_PUBLIC_CORE_URL", "http://127.0.0.1:8787");
-    match spawn_grouped(con_cmd) {
+    match spawn_grouped(console_command(bundle)) {
         Ok(c) => {
             pids.push(c.id() as i32);
             std::mem::forget(c);
