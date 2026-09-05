@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/remote-schema.json",
+  "identifier": "remote-console",
+  "description": "Yerel/served konsol (webview'a navigate edilen) → dialog (klasör seçici) IPC erişimi. Konsol bizim güvenilir içeriğimiz (127.0.0.1:3100 / app.brainmux.com). Sadece dialog:allow-open.",
+  "windows": ["main"],
+  "remote": {
+    "urls": [
+      "http://127.0.0.1:3100/*",
+      "http://localhost:3100/*",
+      "https://app.brainmux.com/*"
+    ]
+  },
+  "permissions": ["dialog:allow-open"]
+}

@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"   # native klasör seçici (evrak Kaynaklar) — konsol IPC'den çağırır
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 log = "0.4"
